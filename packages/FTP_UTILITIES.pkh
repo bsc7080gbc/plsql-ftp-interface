@@ -155,7 +155,7 @@ IS
    p_database                    VARCHAR2 ( 100 );
 --
 --   p_database                    VARCHAR2 ( 100 );
---                                          := hum_time_tools.get_oracle_instance;
+--                                          := get_oracle_instance;
    p_database_string             VARCHAR2 ( 100 ) := ' - ' || p_database;
 END ftp_utilities;
 /
