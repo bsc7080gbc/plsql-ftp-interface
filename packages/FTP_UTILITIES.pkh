@@ -1,4 +1,4 @@
-CREATE OR REPLACE PACKAGE hum_ftp_utilities
+CREATE OR REPLACE PACKAGE ftp_utilities
 IS
 /* THESE HAVE BEEN SETUP TO BE UTILIZED AS DIRECT CALLS VIA ORACLE APPLICATIONS */
 /* THEY RETURN FAILURE CODES APPROPRIATLY FOR USAGE IN REQUEST SETS AND PAGING ROUTINES */
@@ -31,9 +31,12 @@ IS
 
 /* USE THIS PROCEDURE TO TRANSFER A LOCAL FILE TO A REMOTE SERVER LOCATION */
 /* BINARY SUPPORTED */
+
 /* IF BINARY, THEN LOCAL DIRECTORY MUST BE DEFINED AS DATABASE DIRECTORY */
 /* CONTACT DBA's TO VERIFY *?
+
 /* HINT : IT MIGHT BE A GOOD IDEA TO SETUP ALL XFER INTERFACE DIRECTORIES */
+
    PROCEDURE put_remote_file (
       errbuf                     OUT      VARCHAR2
 ,     retcode                    OUT      NUMBER
@@ -154,5 +157,5 @@ IS
 --   p_database                    VARCHAR2 ( 100 );
 --                                          := hum_time_tools.get_oracle_instance;
    p_database_string             VARCHAR2 ( 100 ) := ' - ' || p_database;
-END hum_ftp_utilities;
+END ftp_utilities;
 /
