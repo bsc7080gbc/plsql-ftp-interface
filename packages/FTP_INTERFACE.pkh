@@ -1,0 +1,890 @@
+CREATE OR REPLACE PACKAGE ftp_interface AUTHID CURRENT_USER
+AS
+     /*
+      *
+      *  PL/SQL FTP Client
+      *
+	*  Composite code built from a variety of sources and research
+      *  Barry Chase (Github @bsc7080gbc)
+      *  Original Version March 2002
+      *  Last Update Sep 2006
+      *
+      *  Current Version 3.1.2
+      *
+      *
+      *  OVERVIEW
+      *  --------------------
+      *  This package uses the standard packages UTL_FILE and UTL_TCP, along with LOBs to perform
+      *  client-side FTP functionality as defined in the World Wide Web Consortium's RFC 959
+      *  document - http://www.w3.org/Protocols/rfc959/
+      *
+      *  Works with PASV ftp connections only
+      *
+      *  The procedures and functions in this package allow single file transfer using
+      *  standard TCP/IP connections.
+      *
+      *  LIMITATIONS
+      *  --------------------
+      *   Requires Oracle DB 9.2.x.x due to usage of UTL_FILE.READ_RAW and WRITE_RAW
+      *
+      *  USAGE
+      *  --------------------
+      *  Four primary functions are available for FTP - PUT, GET, RENAME, REMOVE
+      *
+      *  The PUT and GET functions are included for convenience to FTP one file at a time.
+      *  REMOVE function deletes a file from a remote server.
+      *  RENAME function renames a file on a remote server.
+      *  LS and DIR functions provide remote directory listings
+	*  RMDIR and MKDIR functions provide directory creation/removal
+	*  VERIFY_SERVER function allows you to verify server up/down status as well as validate path
+      *
+      *  CREDITS
+      *  --------------------
+      *
+      *  This package was developed through an initial 2 years of research. I have reviewed
+      *  any number of partial and complete ftp solutions. None of them had everything that
+      *  I desired. None of them worked exactly as hoped. Improvements have continued since then.
+      *
+      *  Good example is where the solution provided by Timothy Hall, which answered the question
+      *  on how to read files from the filesystem into a LOB. His method worked, however there
+      *  were some limitations, but an excellent beginning.
+      *
+      *  With this knowledge, I was able to implement binary support in the package where it had not
+      *  previously been available.
+      *
+      *  Added MVS mainframe support as well, which was a limitation at first.
+      *
+      *  However, I still feel its important to give proper credit to those who have made their work public.
+      *
+      * --
+      *  FTP_INTERFACE package created by Russ Johnson. rjohnson@braunconsult.com
+      *   http://www.braunconsult.com
+      *
+      *  Much of the PL/SQL code in this package was based on Java code written by
+      *  Bruce Blackshaw of Enterprise Distributed Technologies Ltd.  None of that code
+      *  was copied, but the objects and methods greatly helped my understanding of the
+      *  FTP Client process.
+      *
+      *  http://www.enterprisedt.com
+      * --
+      *
+      * --
+      *  Technical article wrriten by Dmitry Bouzolin. dbouzolin@yahoo.com
+      *     http://www.quest-pipelines.com/newsletter-v3/0302_C.htm
+      * --
+      *
+      * --
+      *  FTP package created by Timothy Hall
+      *  http://www.oracle-base.com/articles/9i/FTPFromPLSQL9i.php
+      * --
+      *
+      * --
+      *  FTP command reference
+      *   http://cr.yp.to/ftp.html
+      * --
+      *
+      * --
+      *  Ask Tom - Oracle Forum
+      *   http://asktom.oracle.com
+
+      * --
+      * Paul James donated support for LIST and NLIST commands
+      * http://daemoncoder.blogspot.com/
+      * http://technology.amis.nl/blog/1247/implementing-an-ftp-server-in-plsql
+      *
+      * --
+      * --
+      *  The W3C's RFC 959 that describes the FTP process.
+      *  http://www.w3c.org
+      * --
+      *
+      *
+   */
+   --
+   --
+   --
+   -- Declarations
+   --
+   -- FTP_DEBUG flag
+   --
+   -- Use this flag to produce some additional
+   -- dbms_output to analyze issues with the operations
+   -- or enhance with additional features
+   --
+   --
+   l_ftp_debug                   CHAR ( 1 ) := 'N';
+   --
+   -- /* UTL_TCP Connection */
+   u_data_con                    utl_tcp.connection;
+   u_ctrl_con                    utl_tcp.connection;
+   /* LOB  placeholders */
+   --
+   -- We use these to hold LOBs when working with
+   -- the get_clob/get_blob and put_clob/put_blob and
+   -- dir_clob and ls_clob
+   --
+   g_data_b                      BLOB;
+   g_data_c                      CLOB;
+   /*
+    * Timeout
+    *
+   */
+   --
+   -- This controls the tcp connection itself.
+   -- if it goes beyond this setting, then the connection
+   -- will be terminated. You will get an error
+   -- that says something to the effect that there
+   -- was a TNS Network error
+   --
+   tx_timeout                    PLS_INTEGER := 240;
+                                                  -- 240 seconds := 4 minutes
+   /*
+    * Mainframe
+   */
+   --
+   -- Right now this code supports mainframe (MVS systems)
+   -- the presumption is that the server codes should be
+   -- valid for other mainframe O/S setups. You may have
+   -- test validate this for your environment
+   --
+   mainframe_connection          BOOLEAN := FALSE;
+   mainframe_cmd                 VARCHAR2 ( 32000 );
+   /*
+    * System Type :: Get type using SYST command
+   */
+   --
+   -- This is used within our code to control
+   -- how remote directory listings are listed
+   -- specifically regarding the headers above the
+   -- directory listings.
+   --
+   -- It is conceivable that you could leverage
+   -- the system type for other purposes.
+   --
+   v_system_type                 VARCHAR2 ( 1000 );
+   v_system_type_reply           VARCHAR2 ( 1000 );
+   /*
+    * Operation Mode
+   *
+   * LOB or FILE
+   *
+   * LOB means we will be inputing/outputing information as CLOB/BLOB
+   * as opposed to FILE which is working with the local filesystem directly
+   *
+   */
+   v_operation_mode              VARCHAR2 ( 10 ) := 'FILE';
+   /**
+    * Exceptions
+    *
+    */
+   ctrl_exception                EXCEPTION;
+   data_exception                EXCEPTION;
+   /**
+    * Constants - FTP valid response codes
+    *
+	* These are pretty much the standard return codes
+	* for FTP servers. If you find that your return codes
+	* are different, then you will need to alter these codes
+	* accordingly.
+	*
+    */
+   --
+   -- These define successful return codes
+   -- if we receive codes different from these
+   -- then we assume something did not go right
+   --
+   connect_code         CONSTANT PLS_INTEGER := 220;
+   user_code            CONSTANT PLS_INTEGER := 331;
+   login_code           CONSTANT PLS_INTEGER := 230;
+   pwd_code             CONSTANT PLS_INTEGER := 257;
+   pasv_code            CONSTANT PLS_INTEGER := 227;
+   cwd_code             CONSTANT PLS_INTEGER := 250;
+   mkd_code             CONSTANT PLS_INTEGER := 257;
+   rmd_code             CONSTANT PLS_INTEGER := 250;
+--
+   tsfr_start_code1     CONSTANT PLS_INTEGER := 125;
+   tsfr_start_code2     CONSTANT PLS_INTEGER := 150;
+   tsfr_end_code        CONSTANT PLS_INTEGER := 226;
+   tsfr_end_code_mf     CONSTANT PLS_INTEGER := 250;
+-- Had to add this code (tsfr_end_code_mf) because our mainframe success code was 250 and not 226 --
+   quit_code            CONSTANT PLS_INTEGER := 221;
+   syst_code            CONSTANT PLS_INTEGER := 215;
+   type_code            CONSTANT PLS_INTEGER := 200;
+   delete_code          CONSTANT PLS_INTEGER := 250;
+   rnfr_code            CONSTANT PLS_INTEGER := 350;
+   rnto_code            CONSTANT PLS_INTEGER := 250;
+   site_code            CONSTANT PLS_INTEGER := 200;
+   noop_code			CONSTANT PLS_INTEGER := 200;
+
+--
+
+   /**
+    * FTP File record datatype
+    *
+    * Elements:
+    * localpath - local path is defined as the DBA Directories defined
+    *             exception to this is when we are performing CLOB/BLOB
+    *             operations instead of filesystem operations.
+    * filename - filename and extension for the file to be received or sent
+    * remotepath - full directory name in which the local file will be sent or the
+    *            remote file exists.  Should be in UNIX format regardless of FTP server - '/one/two/three'
+    * filetype - 'ASCII' or 'BINARY'
+    * transfer_mode - 'PUT', 'GET', etc.
+    * status - status of the transfer.  'ERROR' or 'SUCCESS'
+    * error_message - meaningful (hopefully) error message explaining the reason for failure
+    * bytes_transmitted - how many bytes were sent/received
+    * trans_start - date/time the transmission started
+    * trans_end - date/time the transmission ended
+    *
+    */
+   TYPE r_ftp_rec IS RECORD (
+      localpath                     VARCHAR2 ( 255 )
+,     filename                      VARCHAR2 ( 255 )
+,     remotepath                    VARCHAR2 ( 255 )
+,     filetype                      VARCHAR2 ( 20 )
+,     transfer_mode                 VARCHAR2 ( 30 )
+,     status                        VARCHAR2 ( 40 )
+,     error_message                 VARCHAR2 ( 255 )
+,     bytes_transmitted             NUMBER
+,     trans_start                   DATE
+,     trans_end                     DATE
+   );
+
+   /**
+    * FTP File Table - used to store many files for transfer
+    *
+    */
+   TYPE t_ftp_rec IS TABLE OF r_ftp_rec
+      INDEX BY BINARY_INTEGER;
+
+--
+-- CREATE_PASV
+--
+-- Create the passive host IP and port number to connect to
+--
+   PROCEDURE create_pasv (
+      p_pasv_cmd                 IN       VARCHAR2
+,     p_pasv_host                OUT      VARCHAR2
+,     p_pasv_port                OUT      NUMBER );
+
+--
+-- VALIDATE_REPLY
+--
+-- Read a single or multi-line reply from the FTP server and VALIDATE
+-- it against the code passed in p_code.
+--
+-- Return TRUE if reply code matches p_code, FALSE if it doesn't or error
+-- occurs
+--
+-- Send full server response back to calling procedure
+--
+   FUNCTION validate_reply (
+      p_ctrl_con                 IN OUT   utl_tcp.connection
+,     p_code                     IN       PLS_INTEGER
+,     p_reply                    OUT      VARCHAR2 )
+      RETURN BOOLEAN;
+
+--
+-- VALIDATE_REPLY
+--
+-- Read a single or multi-line reply from the FTP server and VALIDATE
+-- it against the code passed in p_code.
+--
+-- Return TRUE if reply code matches p_code1 or p_code2, FALSE if it doesn't or error
+-- occurs
+--
+-- Send full server response back to calling procedure
+--
+   FUNCTION validate_reply (
+      p_ctrl_con                 IN OUT   utl_tcp.connection
+,     p_code1                    IN       PLS_INTEGER
+,     p_code2                    IN       PLS_INTEGER
+,     p_reply                    OUT      VARCHAR2 )
+      RETURN BOOLEAN;
+
+--
+-- TRANSFER_DATA
+--
+-- Handles actual data transfer.  Responds with status, error message, and
+-- transfer statistics.
+--
+-- Potential errors could be with connection or file i/o
+--
+   PROCEDURE transfer_data (
+      u_ctrl_connection          IN OUT   utl_tcp.connection
+,     p_localpath                IN       VARCHAR2
+,     p_filename                 IN       VARCHAR2
+,     p_filetype                 IN       VARCHAR2
+,     p_pasv_host                IN       VARCHAR2
+,     p_pasv_port                IN       PLS_INTEGER
+,     p_transfer_mode            IN       VARCHAR2
+,     v_status                   OUT      VARCHAR2
+,     v_error_message            OUT      VARCHAR2
+,     n_bytes_transmitted        OUT      NUMBER
+,     d_trans_start              OUT      DATE
+,     d_trans_end                OUT      DATE );
+
+--
+--
+-- FTP_FILES_STAGE
+--
+-- Handles connection to remote server and initial remote server commands
+--
+--
+--    * Function to handle FTP of files.
+--    * Returns TRUE if no batch-level errors occur.
+--    * Returns FALSE if a batch-level error occurs.
+--    *
+--    * Parameters:
+--    *
+--    * p_error_msg - error message for batch level errors
+--    * p_files - FTP_INTERFACE.t_ftp_rec table type.  Accepts
+--    *           list of files to be transferred
+--    *           returns the table updated with transfer status, error message,
+--    *           bytes_transmitted, transmission start date/time and transmission end
+--    *           date/time
+--    * p_username - username for FTP server
+--    * p_password - password for FTP server
+--    * p_hostname - hostname or IP address of server Ex: 'ftp.oracle.com' or '127.0.0.1'
+--    * p_port - port number to connect on.  FTP is usually on 21, but this may be overridden
+--    *          if the server is configured differently.
+--
+   FUNCTION ftp_files_stage (
+      p_error_msg                OUT      VARCHAR2
+,     p_files                    IN OUT   t_ftp_rec
+,     p_username                 IN       VARCHAR2
+,     p_password                 IN       VARCHAR2
+,     p_hostname                 IN       VARCHAR2
+,     p_port                     IN       PLS_INTEGER DEFAULT 21 )
+      RETURN BOOLEAN;
+
+--
+-- GET_LOCAL_BINARY_DATA
+--
+-- Load local binary file into BLOB
+--
+   FUNCTION get_local_binary_data (
+      p_dir                      IN       VARCHAR2
+,     p_file                     IN       VARCHAR2 )
+      RETURN BLOB;
+
+--
+-- GET_REMOTE_BINARY_DATA
+--
+-- Loads remote binary file into BLOB
+--
+   FUNCTION get_remote_binary_data (
+      u_ctrl_connection          IN OUT   utl_tcp.connection )
+      RETURN BLOB;
+
+--
+-- GET_REMOTE_ASCII_DATA
+--
+-- Loads remote ascii file into CLOB
+--
+-- Note, we do not have a GET_LOCAL_ASCII_DATA because that code
+-- is found within the TRANSFER_DATA routine itself using UTL_FILE.GET_LINE
+-- operations
+--
+   FUNCTION get_remote_ascii_data (
+      u_ctrl_connection          IN OUT   utl_tcp.connection )
+      RETURN CLOB;
+
+--
+-- GET_REMOTE_LISTING_DATA
+--
+-- This is used for obtaining a remote directory listing
+-- and loading up into a CLOB
+--
+   FUNCTION get_remote_listing_data (
+      u_ctrl_connection          IN OUT   utl_tcp.connection
+,     p_filename_filter          IN       VARCHAR2
+,     p_tsfr_mode                IN       VARCHAR2 )
+      RETURN CLOB;
+
+--
+-- PUT_LOCAL_BINARY_DATA
+--
+-- This is used to write out a BLOB
+-- to the local filesystem after
+-- retrieving data from remote server
+--
+   PROCEDURE put_local_binary_data (
+      p_data                     IN       BLOB
+,     p_dir                      IN       VARCHAR2
+,     p_file                     IN       VARCHAR2 );
+
+--
+-- PUT_REMOTE_BINARY_DATA
+--
+-- This is used for upload BLOB
+-- to remote server after retrieving
+-- from local filesystem or passed
+-- via parameter as a BLOB e.g. PUT_BLOB function
+-- in this package.
+--
+   PROCEDURE put_remote_binary_data (
+      u_ctrl_connection          IN OUT   utl_tcp.connection
+,     p_data                     IN       BLOB );
+
+--
+-- PUT_REMOTE_ASCII_DATA
+--
+-- This is used for upload CLOB
+-- to remote server after retrieving
+-- when passed via parameter as a
+-- CLOB e.g. PUT_BLOB function in this package.
+--
+   PROCEDURE put_remote_ascii_data (
+      u_ctrl_connection          IN OUT   utl_tcp.connection
+,     p_data                     IN       CLOB );
+
+   /**
+    * Convenience function for single-file PUT
+    *
+    * Parameters:
+    * localpath - local path is defined as the DBA Directories defined
+    * p_filename - filename and extension for the file to be received or sent
+    * p_remotepath - full directory name in which the local file will be sent or the
+    *            remote file exists.  Should be in UNIX format regardless of FTP server - '/one/two/three'
+    * p_username - username for FTP server
+    * p_password - password for FTP server
+    * p_hostname - FTP server IP address or host name Ex: 'ftp.oracle.com' or '127.0.0.1'
+    * v_status - status of the transfer.  'ERROR' or 'SUCCESS'
+    * v_error_message - meaningful (hopefully) error message explaining the reason for failure
+    * n_bytes_transmitted - how many bytes were sent/received
+    * d_trans_start - date/time the transmission started
+    * d_trans_end - date/time the transmission ended
+    * p_port - port number to connect to, default is 21
+    * p_filetype - Default to ASCII but optionally can be BINARY
+    * p_mainframe_ftp - Default FALSE. If target server is Mainframe MVS, must be TRUE.
+   * p_mainframe_cmd - If Mainframe parm is TRUE, then this must have a value
+   *                 For file transfers this would be the site command to define file layout
+    */
+   FUNCTION put (
+      p_localpath                IN       VARCHAR2
+,     p_filename                 IN       VARCHAR2
+,     p_remotepath               IN       VARCHAR2
+,     p_username                 IN       VARCHAR2
+,     p_password                 IN       VARCHAR2
+,     p_hostname                 IN       VARCHAR2
+,     v_status                   OUT      VARCHAR2
+,     v_error_message            OUT      VARCHAR2
+,     n_bytes_transmitted        OUT      NUMBER
+,     d_trans_start              OUT      DATE
+,     d_trans_end                OUT      DATE
+,     p_port                     IN       PLS_INTEGER DEFAULT 21
+,     p_filetype                 IN       VARCHAR2 := 'ASCII'
+,     p_mainframe_ftp            IN       BOOLEAN DEFAULT FALSE
+,     p_mainframe_cmd            IN       VARCHAR2 DEFAULT NULL )
+      RETURN BOOLEAN;
+
+   /**
+    * Convenience function for single-file GET
+    *
+    * Parameters:
+    * localpath - local path is defined as the DBA Directories defined
+    * p_filename - filename and extension for the file to be received or sent
+    * p_remotepath - full directory name in which the local file will be sent or the
+    *            remote file exists.  Should be in UNIX format regardless of FTP server - '/one/two/three'
+    * p_username - username for FTP server
+    * p_password - password for FTP server
+    * p_hostname - FTP server IP address or host name Ex: 'ftp.oracle.com' or '127.0.0.1'
+    * v_status - status of the transfer.  'ERROR' or 'SUCCESS'
+    * v_error_message - meaningful (hopefully) error message explaining the reason for failure
+    * n_bytes_transmitted - how many bytes were sent/received
+    * d_trans_start - date/time the transmission started
+    * d_trans_end - date/time the transmission ended
+    * p_port - port number to connect to, default is 21
+    * p_filetype - Default to ASCII but optionally can be BINARY
+    * p_mainframe_ftp - Default FALSE. If target server is Mainframe MVS, must be TRUE.
+   * p_mainframe_cmd - If Mainframe parm is TRUE, then this must have a value
+   *                 For file transfers this would be the site command to define file layout
+    */
+   FUNCTION get (
+      p_localpath                IN       VARCHAR2
+,     p_filename                 IN       VARCHAR2
+,     p_remotepath               IN       VARCHAR2
+,     p_username                 IN       VARCHAR2
+,     p_password                 IN       VARCHAR2
+,     p_hostname                 IN       VARCHAR2
+,     v_status                   OUT      VARCHAR2
+,     v_error_message            OUT      VARCHAR2
+,     n_bytes_transmitted        OUT      NUMBER
+,     d_trans_start              OUT      DATE
+,     d_trans_end                OUT      DATE
+,     p_port                     IN       PLS_INTEGER DEFAULT 21
+,     p_filetype                 IN       VARCHAR2 := 'ASCII'
+,     p_mainframe_ftp            IN       BOOLEAN DEFAULT FALSE
+,     p_mainframe_cmd            IN       VARCHAR2 DEFAULT NULL )
+      RETURN BOOLEAN;
+
+    /**
+    * Convenience function for single-file DELETE
+    *
+    * Parameters:
+    * p_localpath - Value will be NULL as it does not apply
+    * p_filename - filename and extension for the file to be deleted on remote server
+    * p_remotepath - full directory name in which the remote file exists.
+   * Should be in UNIX format regardless of FTP server - '/one/two/three'
+    * p_username - username for FTP server
+    * p_password - password for FTP server
+    * p_hostname - FTP server IP address or host name Ex: 'ftp.oracle.com' or '127.0.0.1'
+    * v_status - status of the transfer.  'ERROR' or 'SUCCESS'
+    * v_error_message - meaningful (hopefully) error message explaining the reason for failure
+    * n_bytes_transmitted - how many bytes were sent/received
+    * d_trans_start - date/time the transmission started
+    * d_trans_end - date/time the transmission ended
+    * p_port - port number to connect to, default is 21
+    * p_filetype - Default to BINARY. Value is ignored during process.
+    * p_mainframe_connection - Default FALSE. If target server is Mainframe MVS, must be TRUE.
+    */
+   FUNCTION remove (
+      p_localpath                IN       VARCHAR2
+,     p_filename                 IN       VARCHAR2
+,     p_remotepath               IN       VARCHAR2
+,     p_username                 IN       VARCHAR2
+,     p_password                 IN       VARCHAR2
+,     p_hostname                 IN       VARCHAR2
+,     v_status                   OUT      VARCHAR2
+,     v_error_message            OUT      VARCHAR2
+,     n_bytes_transmitted        OUT      NUMBER
+,     d_trans_start              OUT      DATE
+,     d_trans_end                OUT      DATE
+,     p_port                     IN       PLS_INTEGER DEFAULT 21
+,     p_filetype                 IN       VARCHAR2 := 'BINARY'
+,     p_mainframe_connection     IN       BOOLEAN DEFAULT FALSE )
+      RETURN BOOLEAN;
+
+   /**
+    * Convenience function for single-file  RENAME
+    *
+    * Parameters:
+    * p_localpath - Value will be NULL as it does not apply
+    * p_filename - Concatenated value of filename.ext | new_filename.ext on remote server
+    * p_remotepath - full directory name in which the remote file exists.
+   * Should be in UNIX format regardless of FTP server - '/one/two/three'
+    * p_username - username for FTP server
+    * p_password - password for FTP server
+    * p_hostname - FTP server IP address or host name Ex: 'ftp.oracle.com' or '127.0.0.1'
+    * v_status - status of the transfer.  'ERROR' or 'SUCCESS'
+    * v_error_message - meaningful (hopefully) error message explaining the reason for failure
+    * n_bytes_transmitted - how many bytes were sent/received
+    * d_trans_start - date/time the transmission started
+    * d_trans_end - date/time the transmission ended
+    * p_port - port number to connect to, default is 21
+    * p_filetype - Default to BINARY. Value is ignored during process.
+    * p_mainframe_connection - Default FALSE. If target server is Mainframe MVS, must be TRUE.
+    */
+   FUNCTION RENAME (
+      p_localpath                IN       VARCHAR2
+,     p_filename                 IN       VARCHAR2
+,     p_remotepath               IN       VARCHAR2
+,     p_username                 IN       VARCHAR2
+,     p_password                 IN       VARCHAR2
+,     p_hostname                 IN       VARCHAR2
+,     v_status                   OUT      VARCHAR2
+,     v_error_message            OUT      VARCHAR2
+,     n_bytes_transmitted        OUT      NUMBER
+,     d_trans_start              OUT      DATE
+,     d_trans_end                OUT      DATE
+,     p_port                     IN       PLS_INTEGER DEFAULT 21
+,     p_filetype                 IN       VARCHAR2 := 'BINARY'
+,     p_mainframe_connection     IN       BOOLEAN DEFAULT FALSE )
+      RETURN BOOLEAN;
+
+   /**
+    * Convenience function for single-file  VERIFY_SERVER
+    *
+    * Parameters:
+    * p_remotepath - full directory name you wish to verify along with server up/down status
+    *              Should be in UNIX format regardless of FTP server - '/one/two/three'
+    * p_username - username for FTP server
+    * p_password - password for FTP server
+    * p_hostname - FTP server IP address or host name Ex: 'ftp.oracle.com' or '127.0.0.1'
+    * v_status - status of the transfer.  'ERROR' or 'SUCCESS'
+    * v_error_message - meaningful (hopefully) error message explaining the reason for failure
+    * p_port - port number to connect to, default is 21
+    * p_filetype - Default to BINARY. Value is ignored during process.
+    * p_mainframe_connection - Default FALSE. If target server is Mainframe MVS, must be TRUE.
+    */
+   FUNCTION verify_server (
+      p_remotepath               IN       VARCHAR2
+,     p_username                 IN       VARCHAR2
+,     p_password                 IN       VARCHAR2
+,     p_hostname                 IN       VARCHAR2
+,     v_status                   OUT      VARCHAR2
+,     v_error_message            OUT      VARCHAR2
+,     p_port                     IN       PLS_INTEGER DEFAULT 21
+,     p_filetype                 IN       VARCHAR2 := 'BINARY'
+,     p_mainframe_connection     IN       BOOLEAN DEFAULT FALSE )
+      RETURN BOOLEAN;
+
+   /**
+   * Convenience function for DIR - Long listing providing all details
+   *
+   * Parameters:
+    * localpath - local path is defined as the DBA Directories defined
+   * p_filename_filter - Pass nothing for all files to be displayed, or filename. Wildcard * allowed.
+   * p_dir_filename     - Filename of Directory listing retrieved from remote server
+   * p_remotepath - full directory name to get a list of files from
+   *            Should be in UNIX format regardless of FTP server - '/one/two/three'
+   * p_username - username for FTP server
+   * p_password - password for FTP server
+   * p_hostname - FTP server IP address or host name Ex: 'ftp.oracle.com' or '127.0.0.1'
+   * v_status - status of the transfer.  'ERROR' or 'SUCCESS'
+   * v_error_message - meaningful (hopefully) error message explaining the reason for failure
+   * n_bytes_transmitted - how many bytes were sent/received
+   * d_trans_start - date/time the transmission started
+   * d_trans_end - date/time the transmission ended
+   * p_port - port number to connect to, default is 21
+   * p_filetype - Default to ASCII but optionally can be BINARY
+   * p_mainframe_ftp - Default FALSE. If target server is Mainframe MVS, must be TRUE.
+   */
+   FUNCTION dir (
+      p_localpath                IN       VARCHAR2
+,     p_filename_filter          IN       VARCHAR2 DEFAULT NULL
+,     p_dir_filename             IN       VARCHAR2 DEFAULT 'remotedir_list.txt'
+,     p_remotepath               IN       VARCHAR2
+,     p_username                 IN       VARCHAR2
+,     p_password                 IN       VARCHAR2
+,     p_hostname                 IN       VARCHAR2
+,     v_status                   OUT      VARCHAR2
+,     v_error_message            OUT      VARCHAR2
+,     n_bytes_transmitted        OUT      NUMBER
+,     d_trans_start              OUT      DATE
+,     d_trans_end                OUT      DATE
+,     p_port                     IN       PLS_INTEGER DEFAULT 21
+,     p_filetype                 IN       VARCHAR2 := 'ASCII'
+,     p_mainframe_ftp            IN       BOOLEAN DEFAULT FALSE )
+      RETURN BOOLEAN;
+
+       /**
+   * Convenience function for LS - Short listing only filenames
+   *
+   * Parameters:
+    * localpath - local path is defined as the DBA Directories defined
+   * p_filename_filter - Pass nothing for all files to be displayed, or filename. Wildcard * allowed.
+   * p_dir_filename     - Filename of Directory listing retrieved from remote server
+   * p_remotepath - full directory name to get a list of files from
+   *            Should be in UNIX format regardless of FTP server - '/one/two/three'
+   * p_username - username for FTP server
+   * p_password - password for FTP server
+   * p_hostname - FTP server IP address or host name Ex: 'ftp.oracle.com' or '127.0.0.1'
+   * v_status - status of the transfer.  'ERROR' or 'SUCCESS'
+   * v_error_message - meaningful (hopefully) error message explaining the reason for failure
+   * n_bytes_transmitted - how many bytes were sent/received
+   * d_trans_start - date/time the transmission started
+   * d_trans_end - date/time the transmission ended
+   * p_port - port number to connect to, default is 21
+   * p_filetype - Default to ASCII but optionally can be BINARY
+   * p_mainframe_ftp - Default FALSE. If target server is Mainframe MVS, must be TRUE.
+   */
+   FUNCTION ls (
+      p_localpath                IN       VARCHAR2
+,     p_filename_filter          IN       VARCHAR2 DEFAULT NULL
+,     p_dir_filename             IN       VARCHAR2 DEFAULT 'remotedir_list.txt'
+,     p_remotepath               IN       VARCHAR2
+,     p_username                 IN       VARCHAR2
+,     p_password                 IN       VARCHAR2
+,     p_hostname                 IN       VARCHAR2
+,     v_status                   OUT      VARCHAR2
+,     v_error_message            OUT      VARCHAR2
+,     n_bytes_transmitted        OUT      NUMBER
+,     d_trans_start              OUT      DATE
+,     d_trans_end                OUT      DATE
+,     p_port                     IN       PLS_INTEGER DEFAULT 21
+,     p_filetype                 IN       VARCHAR2 := 'ASCII'
+,     p_mainframe_ftp            IN       BOOLEAN DEFAULT FALSE )
+      RETURN BOOLEAN;
+
+   /*****************************************************************************
+   **  Convenience function for single-file PUT
+   **  Pass CLOB for data to transfer.
+   **  Formats file information for ftp_files_stage function and calls it.
+   **
+   *****************************************************************************/
+   FUNCTION put_clob (
+      p_filename                 IN       VARCHAR2
+,     p_clob                     IN       CLOB
+,     p_remotepath               IN       VARCHAR2
+,     p_username                 IN       VARCHAR2
+,     p_password                 IN       VARCHAR2
+,     p_hostname                 IN       VARCHAR2
+,     v_status                   OUT      VARCHAR2
+,     v_error_message            OUT      VARCHAR2
+,     n_bytes_transmitted        OUT      NUMBER
+,     d_trans_start              OUT      DATE
+,     d_trans_end                OUT      DATE
+,     p_port                     IN       PLS_INTEGER DEFAULT 21
+,     p_mainframe_ftp            IN       BOOLEAN DEFAULT FALSE
+,     p_mainframe_cmd            IN       VARCHAR2 DEFAULT NULL )
+      RETURN BOOLEAN;
+
+   /*****************************************************************************
+   **  Convenience function for single-file GET
+   **  Pass CLOB for data to transfer.
+   **  Formats file information for ftp_files_stage function and calls it.
+   **
+   *****************************************************************************/
+   FUNCTION get_clob (
+      p_filename                 IN       VARCHAR2
+,     p_clob                     OUT      CLOB
+,     p_remotepath               IN       VARCHAR2
+,     p_username                 IN       VARCHAR2
+,     p_password                 IN       VARCHAR2
+,     p_hostname                 IN       VARCHAR2
+,     v_status                   OUT      VARCHAR2
+,     v_error_message            OUT      VARCHAR2
+,     n_bytes_transmitted        OUT      NUMBER
+,     d_trans_start              OUT      DATE
+,     d_trans_end                OUT      DATE
+,     p_port                     IN       PLS_INTEGER DEFAULT 21
+,     p_mainframe_ftp            IN       BOOLEAN DEFAULT FALSE
+,     p_mainframe_cmd            IN       VARCHAR2 DEFAULT NULL )
+      RETURN BOOLEAN;
+
+   /*****************************************************************************
+   **  Convenience function for single-file PUT
+   **  Pass BLOB for data to transfer.
+   **  Formats file information for ftp_files_stage function and calls it.
+   **
+   *****************************************************************************/
+   FUNCTION put_blob (
+      p_filename                 IN       VARCHAR2
+,     p_blob                     IN       BLOB
+,     p_remotepath               IN       VARCHAR2
+,     p_username                 IN       VARCHAR2
+,     p_password                 IN       VARCHAR2
+,     p_hostname                 IN       VARCHAR2
+,     v_status                   OUT      VARCHAR2
+,     v_error_message            OUT      VARCHAR2
+,     n_bytes_transmitted        OUT      NUMBER
+,     d_trans_start              OUT      DATE
+,     d_trans_end                OUT      DATE
+,     p_port                     IN       PLS_INTEGER DEFAULT 21
+,     p_mainframe_ftp            IN       BOOLEAN DEFAULT FALSE
+,     p_mainframe_cmd            IN       VARCHAR2 DEFAULT NULL )
+      RETURN BOOLEAN;
+
+   /*****************************************************************************
+   **  Convenience function for single-file GET
+   **  Pass BLOB for data to transfer.
+   **  Formats file information for ftp_files_stage function and calls it.
+   **
+   *****************************************************************************/
+   FUNCTION get_blob (
+      p_filename                 IN       VARCHAR2
+,     p_blob                     OUT      BLOB
+,     p_remotepath               IN       VARCHAR2
+,     p_username                 IN       VARCHAR2
+,     p_password                 IN       VARCHAR2
+,     p_hostname                 IN       VARCHAR2
+,     v_status                   OUT      VARCHAR2
+,     v_error_message            OUT      VARCHAR2
+,     n_bytes_transmitted        OUT      NUMBER
+,     d_trans_start              OUT      DATE
+,     d_trans_end                OUT      DATE
+,     p_port                     IN       PLS_INTEGER DEFAULT 21
+,     p_mainframe_ftp            IN       BOOLEAN DEFAULT FALSE
+,     p_mainframe_cmd            IN       VARCHAR2 DEFAULT NULL )
+      RETURN BOOLEAN;
+
+     /*****************************************************************************
+   **  Convenience function for dir to local filename
+   **  Formats file information for ftp_files_stage function and calls it.
+   **
+   *****************************************************************************/
+   FUNCTION dir_clob (
+      p_filename_filter          IN       VARCHAR2 DEFAULT NULL
+,     p_clob                     OUT      CLOB
+,     p_remotepath               IN       VARCHAR2
+,     p_username                 IN       VARCHAR2
+,     p_password                 IN       VARCHAR2
+,     p_hostname                 IN       VARCHAR2
+,     v_status                   OUT      VARCHAR2
+,     v_error_message            OUT      VARCHAR2
+,     n_bytes_transmitted        OUT      NUMBER
+,     d_trans_start              OUT      DATE
+,     d_trans_end                OUT      DATE
+,     p_port                     IN       PLS_INTEGER DEFAULT 21
+,     p_mainframe_ftp            IN       BOOLEAN DEFAULT FALSE )
+      RETURN BOOLEAN;
+
+   /*****************************************************************************
+   **  Convenience function for dir to local filename
+   **  Formats file information for ftp_files_stage function and calls it.
+   **
+   *****************************************************************************/
+   FUNCTION ls_clob (
+      p_filename_filter          IN       VARCHAR2 DEFAULT NULL
+,     p_clob                     OUT      CLOB
+,     p_remotepath               IN       VARCHAR2
+,     p_username                 IN       VARCHAR2
+,     p_password                 IN       VARCHAR2
+,     p_hostname                 IN       VARCHAR2
+,     v_status                   OUT      VARCHAR2
+,     v_error_message            OUT      VARCHAR2
+,     n_bytes_transmitted        OUT      NUMBER
+,     d_trans_start              OUT      DATE
+,     d_trans_end                OUT      DATE
+,     p_port                     IN       PLS_INTEGER DEFAULT 21
+,     p_filetype                 IN       VARCHAR2 := 'ASCII'
+,     p_mainframe_ftp            IN       BOOLEAN DEFAULT FALSE )
+      RETURN BOOLEAN;
+
+   /**
+    * Convenience function for create new directory command  MKDIR_REMOTE
+    *
+    * Parameters:
+    * p_remotepath - full directory name in which you wish to switch to before creating new directory.
+    *              Should be in UNIX format regardless of FTP server - '/one/two/three'
+   * p_target_dir - Directory name you wish to create
+    * p_username - username for FTP server
+    * p_password - password for FTP server
+    * p_hostname - FTP server IP address or host name Ex: 'ftp.oracle.com' or '127.0.0.1'
+    * v_status - status of the transfer.  'ERROR' or 'SUCCESS'
+    * v_error_message - meaningful (hopefully) error message explaining the reason for failure
+    * p_port - port number to connect to, default is 21
+    * p_mainframe_connection - Default FALSE. If target server is Mainframe MVS, must be TRUE.
+    */
+   FUNCTION mkdir_remote (
+      p_remotepath               IN       VARCHAR2
+,     p_target_dir               IN       VARCHAR2
+,     p_username                 IN       VARCHAR2
+,     p_password                 IN       VARCHAR2
+,     p_hostname                 IN       VARCHAR2
+,     v_status                   OUT      VARCHAR2
+,     v_error_message            OUT      VARCHAR2
+,     p_port                     IN       PLS_INTEGER DEFAULT 21
+,     p_mainframe_connection     IN       BOOLEAN DEFAULT FALSE )
+      RETURN BOOLEAN;
+
+   /**
+    * Convenience function for remove directory command RMDIR_REMOTE
+    *
+    * Parameters:
+    * p_remotepath - full directory name in which you wish to switch to before removing a directory.
+    *              Should be in UNIX format regardless of FTP server - '/one/two/three'
+   * p_target_dir - Directory name you wish to create
+    * p_username - username for FTP server
+    * p_password - password for FTP server
+    * p_hostname - FTP server IP address or host name Ex: 'ftp.oracle.com' or '127.0.0.1'
+    * v_status - status of the transfer.  'ERROR' or 'SUCCESS'
+    * v_error_message - meaningful (hopefully) error message explaining the reason for failure
+    * p_port - port number to connect to, default is 21
+    * p_mainframe_connection - Default FALSE. If target server is Mainframe MVS, must be TRUE.
+    */
+   FUNCTION rmdir_remote (
+      p_remotepath               IN       VARCHAR2
+,     p_target_dir               IN       VARCHAR2
+,     p_username                 IN       VARCHAR2
+,     p_password                 IN       VARCHAR2
+,     p_hostname                 IN       VARCHAR2
+,     v_status                   OUT      VARCHAR2
+,     v_error_message            OUT      VARCHAR2
+,     p_port                     IN       PLS_INTEGER DEFAULT 21
+,     p_mainframe_connection     IN       BOOLEAN DEFAULT FALSE )
+      RETURN BOOLEAN;
+END ftp_interface;
+/
