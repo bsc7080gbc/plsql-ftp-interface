@@ -1,4 +1,4 @@
-CREATE OR REPLACE PACKAGE BODY hum_ftp_utilities
+CREATE OR REPLACE PACKAGE BODY ftp_utilities
 IS
 --
 -- CHANGE HISTORY
@@ -14,7 +14,7 @@ IS
       p_message                  IN       VARCHAR2 )
    IS
       c_process            CONSTANT VARCHAR2 ( 100 )
-                                            := 'hum_ftp_UTILITIES.PRINT_OUTPUT';
+                                            := 'ftp_UTILITIES.PRINT_OUTPUT';
    BEGIN
       dbms_output.put_line ( SUBSTR ( p_message
 ,                                     1
@@ -57,7 +57,7 @@ IS
 ,     p_mainframe_connection     IN       VARCHAR2 DEFAULT 'F' )
    IS
       c_process            CONSTANT VARCHAR2 ( 100 )
-                                         := 'hum_ftp_UTILITIES.VERIFY_SERVER';
+                                         := 'ftp_UTILITIES.VERIFY_SERVER';
       lbok                          BOOLEAN;
       p_error_msg                   VARCHAR2 ( 32000 );
       p_status                      VARCHAR2 ( 32000 );
@@ -113,7 +113,7 @@ IS
       print_output ( CHR ( 10 ) );
 --
       lbok :=
-         hum_ftp_interface.verify_server
+         ftp_interface.verify_server
                                     ( p_remotepath =>                  p_remote_path
 ,                                     p_username =>                    p_username
 ,                                     p_password =>                    p_password
@@ -174,7 +174,7 @@ IS
 ,     p_mainframe_command        IN       VARCHAR2 DEFAULT NULL)
    IS
       c_process            CONSTANT VARCHAR2 ( 100 )
-                                       := 'hum_ftp_UTILITIES.GET_REMOTE_FILE';
+                                       := 'ftp_UTILITIES.GET_REMOTE_FILE';
       p_status                      VARCHAR2 ( 32000 );
       p_error_msg                   VARCHAR2 ( 32000 );
       p_elapsed_time                VARCHAR2 ( 100 );
@@ -311,7 +311,7 @@ IS
 --
          p_files := p_filename;
          lbok :=
-            hum_ftp_interface.get ( p_localpath =>                   l_interface
+            ftp_interface.get ( p_localpath =>                   l_interface
 ,                                   p_filename =>                    p_files
 ,                                   p_remotepath =>                  p_remote_path
 ,                                   p_username =>                    p_username
@@ -448,7 +448,7 @@ IS
 ,     p_mainframe_command        IN       VARCHAR2 DEFAULT NULL )
    IS
       c_process            CONSTANT VARCHAR2 ( 100 )
-                                       := 'hum_ftp_UTILITIES.PUT_REMOTE_FILE';
+                                       := 'ftp_UTILITIES.PUT_REMOTE_FILE';
       p_status                      VARCHAR2 ( 32000 );
       p_error_msg                   VARCHAR2 ( 32000 );
       p_elapsed_time                VARCHAR2 ( 100 );
@@ -618,7 +618,7 @@ IS
 --
             p_files := p_filename;
             lbok :=
-               hum_ftp_interface.put ( p_localpath =>                   l_interface
+               ftp_interface.put ( p_localpath =>                   l_interface
 ,                                      p_filename =>                    p_files
 ,                                      p_remotepath =>                  p_remote_path
 ,                                      p_username =>                    p_username
@@ -726,7 +726,7 @@ IS
 ,     p_mainframe                IN       VARCHAR2 DEFAULT 'F' )
    IS
       c_process            CONSTANT VARCHAR2 ( 100 )
-                                    := 'hum_ftp_UTILITIES.REMOTE_REMOTE_FILE';
+                                    := 'ftp_UTILITIES.REMOTE_REMOTE_FILE';
       p_status                      VARCHAR2 ( 32000 );
       p_error_msg                   VARCHAR2 ( 32000 );
       p_elapsed_time                VARCHAR2 ( 100 );
@@ -815,7 +815,7 @@ IS
 --
          p_files := p_filename;
          lbok :=
-            hum_ftp_interface.remove
+            ftp_interface.remove
                                     ( p_localpath =>                   p_localpath
 ,                                     p_filename =>                    p_files
 ,                                     p_remotepath =>                  p_remote_path
@@ -898,7 +898,7 @@ IS
 ,     p_mainframe                IN       VARCHAR2 DEFAULT 'F' )
    IS
       c_process            CONSTANT VARCHAR2 ( 100 )
-                                    := 'hum_ftp_UTILITIES.RENAME_REMOTE_FILE';
+                                    := 'ftp_UTILITIES.RENAME_REMOTE_FILE';
       p_status                      VARCHAR2 ( 32000 );
       p_error_msg                   VARCHAR2 ( 32000 );
       p_elapsed_time                VARCHAR2 ( 100 );
@@ -991,7 +991,7 @@ IS
 --
          p_files := p_filename;
          lbok :=
-            hum_ftp_interface.RENAME
+            ftp_interface.RENAME
                                     ( p_localpath =>                   p_localpath
 ,                                     p_filename =>                    p_files
 ,                                     p_remotepath =>                  p_remote_path
@@ -1087,7 +1087,7 @@ IS
 ,     p_mainframe                IN       VARCHAR2 DEFAULT 'F' )
    IS
       c_process            CONSTANT VARCHAR2 ( 100 )
-                                        := 'hum_ftp_UTILITIES.GET_REMOTE_DIR_SHORT';
+                                        := 'ftp_UTILITIES.GET_REMOTE_DIR_SHORT';
       u_filehandle                  utl_file.file_type;
       l_buffer                      VARCHAR2 ( 32000 );
       p_status                      VARCHAR2 ( 32000 );
@@ -1220,7 +1220,7 @@ IS
          print_output ( CHR ( 10 ));
 --
          lbok :=
-            hum_ftp_interface.ls ( p_localpath =>                   l_interface
+            ftp_interface.ls ( p_localpath =>                   l_interface
 ,                                  p_filename_filter =>             l_filename_filter
 ,                                  p_dir_filename =>                l_dir_filename
 ,                                  p_remotepath =>                  p_remote_path
@@ -1374,7 +1374,7 @@ IS
 ,     p_mainframe                IN       VARCHAR2 DEFAULT 'F' )
    IS
       c_process            CONSTANT VARCHAR2 ( 100 )
-                                        := 'hum_ftp_UTILITIES.GET_REMOTE_DIR_LONG';
+                                        := 'ftp_UTILITIES.GET_REMOTE_DIR_LONG';
       u_filehandle                  utl_file.file_type;
       l_buffer                      VARCHAR2 ( 32000 );
       p_status                      VARCHAR2 ( 32000 );
@@ -1506,7 +1506,7 @@ IS
          print_output ( CHR ( 10 ));
 --
          lbok :=
-            hum_ftp_interface.dir ( p_localpath =>                   l_interface
+            ftp_interface.dir ( p_localpath =>                   l_interface
 ,                                   p_filename_filter =>             l_filename_filter
 ,                                   p_dir_filename =>                l_dir_filename
 ,                                   p_remotepath =>                  p_remote_path
@@ -1662,10 +1662,10 @@ IS
 ,     retcode                    OUT      NUMBER )
    IS
       c_process            CONSTANT VARCHAR2 ( 100 )
-                                           := 'hum_ftp_UTILITIES.IS_NOT_PROD';
+                                           := 'ftp_UTILITIES.IS_NOT_PROD';
       l_step                        VARCHAR2 ( 1000 );
    BEGIN
-      l_step := c_process || ' :: Executing HUM_MACHINE_INFO.IS_PROD ';
+      l_step := c_process || ' :: Executing MACHINE_INFO.IS_PROD ';
 
 --
 -- We built a table that has instances referenced in it with an instance type 
@@ -1676,7 +1676,7 @@ IS
 -- Although not included in this document set, it would be easy enough
 -- for someone to add back in.
 --
---      IF hum_machine_info.is_prod ( p_database ) = 'Y'
+--      IF machine_info.is_prod ( p_database ) = 'Y'
 --      THEN
 --         l_step := c_process || ' :: PRODUCTION ENVIRONMENT DETECTED ';
 --         print_output ( l_step);
@@ -1703,5 +1703,5 @@ IS
    END is_not_prod;
 */
 
-END hum_ftp_utilities;
+END ftp_utilities;
 /
