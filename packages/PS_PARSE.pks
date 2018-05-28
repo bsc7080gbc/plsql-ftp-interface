@@ -6,8 +6,8 @@ IS
 ***************************************************************************
 Header: ps_parse,v 1.0 00/11 12:00:00
 
-       System  : HUMCUST
-       Module  : HUMCUST.PS_PARSE
+       System  : 
+       Module  : PS_PARSE
        Purpose : Parse data strings
        Author  : O'Reilly
 ***************************************************************************
