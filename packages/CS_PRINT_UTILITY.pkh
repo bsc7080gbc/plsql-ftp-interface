@@ -1,0 +1,31 @@
+CREATE OR REPLACE PACKAGE HUMCUST.cs_print_utility
+AS
+--
+-- Useful for Oracle Applications environments
+--
+   PROCEDURE print_output(
+      p_message   IN   VARCHAR2
+    , p_mode      IN   VARCHAR2 DEFAULT 'LOG');
+
+--
+-- PRINT_OUTPUT
+--
+-- Displays content to DBMS_OUTPUT, but only when g_debug_flag is set to Y .
+--
+   PROCEDURE print_output(p_message IN VARCHAR2, p_size IN NUMBER DEFAULT 250);
+
+--
+-- PRINT_OUTPUT
+--
+-- Displays content to DBMS_OUTPUT,  with optional display input parameter
+--
+   PROCEDURE print_output(
+      p_display_bit   IN   NUMBER DEFAULT 0
+    , p_message       IN   VARCHAR2
+    , p_size          IN   NUMBER DEFAULT 250);
+
+   p_print_output_mode   VARCHAR2(10);
+   g_debug_flag          CHAR(1)      := 'N';
+END cs_print_utility; 
+/
+
