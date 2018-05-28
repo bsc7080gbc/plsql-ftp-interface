@@ -1,0 +1,55 @@
+CHANGE_HISTORY
+
+
+   *  3.1.3    12-MAR-2008 Corrected defect with binary PUT operations
+   *                            Updated CS_PRINT_UTILITY as well
+   *
+   *  3.1.2    17-JAN-2008 Commented out references to APPS environment and Oracle Applications enabled
+   *		               environments
+   *
+   *  3.1.2    22-SEP-2006 Changed logic for current remote path logic on non-mainframe connections
+   *                       where we picked up path using PWD command and then performed a CWD
+   *                 	   we had to change because the humad\* accounts with backwards slash
+   *                 	   throws the routine off. LTRIM RTRIM was changed to substr and instr
+   *				   commands.
+   *
+   *  3.1.1    16-SEP-2006 Bug identified when download ASCII files. Originally, I built it to remove
+   *                       unnecessary carriage returns that are created when users create csv files
+   *                       in Excel. I accidentally removed this feature.
+
+   *  3.1.0    15-SEP-2006 Added CLOB / BLOB support and Server Type identification
+   *                       Added RMDIR and MKDIR commands for remote server access
+
+   *  3.0.0    30-AUG-2006 Added some debugging code. Streamlined logic in FTP_FILES_STAGE procedure
+
+   *  2.1.0    14-AUG-2006 QUOTE SITE command for mainframe was not working. Corrected same.
+   *                       Additionally, expanded QUOTE SITE command to permit multiple
+   *                       commands to be submitted separated by a | delimiter.
+   *
+   *                       Added dir and ls functionality
+
+   *  2.0      03/01/2004  Upgraded script to support Oracle 9.2.x.x features
+   *                       Requires that DBA_DIRECTORIES be utilitized
+   *                       meaning that instead of passing local path
+   *                       as a path, you must use your defined DBA_DIRECTORY
+   *                       values e.g. INTF0047_TABLES is defined as /xfer/INTF0047
+   *
+   *                       Added binary support
+   *                       Added MVS mainframe support
+
+   *  1.1     03/03/2003   Left package on the shelf to gather dust for awhile.
+   *                       Modified login code. Kept failing for some reason.
+   *                       Removed multiple file support. Couldn't seem to make it work right.
+   *                       Added time_out setting which terminates session if it exceeds 4 minutes
+   *                       Added functionality for remove and rename, and for sending as different filename
+   *
+   *                          -- To process a file as a different name use the # symbol
+   *                          -- test.txt#test.txt20032801
+   *                          -- Would be used if you wanted to send the file test.txt
+   *                              but copy to remote server as test.txt20032801
+
+   *  1.0.1    01/18/2003  Began testing code as proof of concept under 8i.
+   *                       As delivered the code did not work correctly for our 8i environment
+
+   *  1.0.0    11/19/2002  Unit-tested single and multiple transfers between disparate hosts.
+
