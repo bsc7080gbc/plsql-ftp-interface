@@ -1,4 +1,4 @@
-CREATE OR REPLACE PACKAGE BODY HUMCUST.cs_print_utility
+CREATE OR REPLACE PACKAGE BODY cs_print_utility
 AS
    PROCEDURE print_output(
       p_message   IN   VARCHAR2
