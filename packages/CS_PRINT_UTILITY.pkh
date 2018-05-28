@@ -1,4 +1,4 @@
-CREATE OR REPLACE PACKAGE HUMCUST.cs_print_utility
+CREATE OR REPLACE PACKAGE cs_print_utility
 AS
 --
 -- Useful for Oracle Applications environments
