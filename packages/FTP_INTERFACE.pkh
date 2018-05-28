@@ -1,11 +1,11 @@
-CREATE OR REPLACE PACKAGE hum_ftp_interface AUTHID CURRENT_USER
+CREATE OR REPLACE PACKAGE ftp_interface AUTHID CURRENT_USER
 AS
      /*
       *
       *  PL/SQL FTP Client
       *
 	*  Composite code built from a variety of sources and research
-      *  Barry Chase (bsc7080mqc@myoracleportal.com)
+      *  Barry Chase (Github @bsc7080gbc)
       *  Original Version March 2002
       *  Last Update Sep 2006
       *
@@ -886,5 +886,5 @@ AS
 ,     p_port                     IN       PLS_INTEGER DEFAULT 21
 ,     p_mainframe_connection     IN       BOOLEAN DEFAULT FALSE )
       RETURN BOOLEAN;
-END hum_ftp_interface;
+END ftp_interface;
 /
