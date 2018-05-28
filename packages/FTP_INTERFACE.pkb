@@ -1,4 +1,4 @@
-CREATE OR REPLACE PACKAGE BODY hum_ftp_interface
+CREATE OR REPLACE PACKAGE BODY ftp_interface
 AS
 /*
    * VERSION HISTORY
@@ -69,7 +69,7 @@ AS
       v_str                VARCHAR2(500);
       v_bytes_written      NUMBER;
       v_reply              tserverreplya;
-      c_process   CONSTANT VARCHAR2(100)  := 'hum_ftp_interface.WRITECOMMAND';
+      c_process   CONSTANT VARCHAR2(100)  := 'ftp_interface.WRITECOMMAND';
    BEGIN
       v_reply    := tserverreplya();
       v_conn     := a_conn;
@@ -113,7 +113,7 @@ AS
    IS
       v_conn               UTL_TCP.connection;
       v_reply              tserverreplya;
-      c_process   CONSTANT VARCHAR2(100)      := 'hum_ftp_interface.LOGIN';
+      c_process   CONSTANT VARCHAR2(100)      := 'ftp_interface.LOGIN';
    BEGIN
       v_conn     :=
          UTL_TCP.open_connection(remote_host =>      a_site_in
@@ -191,7 +191,7 @@ AS
 --
    PROCEDURE print_output(p_message IN VARCHAR2)
    IS
-      c_process   CONSTANT VARCHAR2(100) := 'hum_ftp_interface.PRINT_OUTPUT';
+      c_process   CONSTANT VARCHAR2(100) := 'ftp_interface.PRINT_OUTPUT';
    BEGIN
 --
 -- Optional method
@@ -244,7 +244,7 @@ AS
       --Host and port to connect to for data transfer
       n_port_dec           NUMBER;
       n_port_add           NUMBER;
-      c_process   CONSTANT VARCHAR2(100) := 'hum_ftp_interface.CREATE_PASV';
+      c_process   CONSTANT VARCHAR2(100) := 'ftp_interface.CREATE_PASV';
    BEGIN
       p_pasv_host    :=
          REPLACE(SUBSTR(v_pasv_cmd, 1, INSTR(v_pasv_cmd, ',', 1, 4) - 1)
@@ -296,7 +296,7 @@ AS
       v_msg                VARCHAR2(1000);
       n_line_count         PLS_INTEGER    := 0;
       c_process   CONSTANT VARCHAR2(100)
-                                        := 'hum_ftp_interface.VALIDATE_REPLY';
+                                        := 'ftp_interface.VALIDATE_REPLY';
    BEGIN
       LOOP
          v_msg           := UTL_TCP.get_line(p_ctrl_con);
@@ -349,7 +349,7 @@ AS
       v_msg                VARCHAR2(1000);
       n_line_count         PLS_INTEGER    := 0;
       c_process   CONSTANT VARCHAR2(100)
-                                        := 'hum_ftp_interface.VALIDATE_REPLY';
+                                        := 'ftp_interface.VALIDATE_REPLY';
    BEGIN
       LOOP
          v_msg           := UTL_TCP.get_line(p_ctrl_con);
@@ -423,7 +423,7 @@ AS
       l_step                 VARCHAR2(1000);
       l_filename_search      VARCHAR2(1000);
       c_process     CONSTANT VARCHAR2(100)
-                                         := 'hum_ftp_interface.TRANSFER_DATA';
+                                         := 'ftp_interface.TRANSFER_DATA';
    BEGIN
 /** Initialize some of our OUT variables **/
       v_status               := 'SUCCESS';
@@ -1422,7 +1422,7 @@ dr-xr-xr-x   1 owner    group               0 Feb  1 17:32 bussys
       RETURN BOOLEAN
    IS
       c_process     CONSTANT VARCHAR2(100)
-                                       := 'hum_ftp_interface.FTP_FILES_STAGE';
+                                       := 'ftp_interface.FTP_FILES_STAGE';
       v_username             VARCHAR2(30)               := p_username;
       v_password             VARCHAR2(30)               := p_password;
       v_hostname             VARCHAR2(30)               := p_hostname;
@@ -1440,8 +1440,8 @@ dr-xr-xr-x   1 owner    group               0 Feb  1 17:32 bussys
       v_mainframe_cmd_temp   VARCHAR2(2000);
       l_step                 VARCHAR2(1000);
       lncnt                  PLS_INTEGER                := 0;
-      ln_array               hum_ps_parse.atoms_tabtype;
-      ln_empty_array         hum_ps_parse.atoms_tabtype;
+      ln_array               ps_parse.atoms_tabtype;
+      ln_empty_array         ps_parse.atoms_tabtype;
       invalid_transfer       EXCEPTION;
    BEGIN
       p_error_msg          := 'FTP Successful';
@@ -1737,9 +1737,9 @@ dr-xr-xr-x   1 owner    group               0 Feb  1 17:32 bussys
 --
                /** Submit QUOTE SITE commands **/
                IF mainframe_connection AND mainframe_cmd IS NOT NULL THEN
-                  hum_ps_parse.std_delimiters    := '|';
+                  ps_parse.std_delimiters    := '|';
                   ln_array                       := ln_empty_array;
-                  hum_ps_parse.parse_string(string_in =>             mainframe_cmd
+                  ps_parse.parse_string(string_in =>             mainframe_cmd
                                           , atomics_list_out =>      ln_array
                                           , num_atomics_out =>       lncnt);
 
@@ -1926,7 +1926,7 @@ dr-xr-xr-x   1 owner    group               0 Feb  1 17:32 bussys
       l_data               BLOB;
       l_dbdir              VARCHAR2(100) := p_dir;
       c_process   CONSTANT VARCHAR2(100)
-                                 := 'hum_ftp_interface.GET_LOCAL_BINARY_DATA';
+                                 := 'ftp_interface.GET_LOCAL_BINARY_DATA';
    BEGIN
       DBMS_LOB.createtemporary(lob_loc =>      l_data
                              , CACHE =>        TRUE
@@ -1967,7 +1967,7 @@ dr-xr-xr-x   1 owner    group               0 Feb  1 17:32 bussys
       l_data               BLOB;
       l_conn               UTL_TCP.connection := u_ctrl_connection;
       c_process   CONSTANT VARCHAR2(100)
-                                := 'hum_ftp_interface.GET_REMOTE_BINARY_DATA';
+                                := 'ftp_interface.GET_REMOTE_BINARY_DATA';
    BEGIN
       DBMS_LOB.createtemporary(lob_loc =>      l_data
                              , CACHE =>        TRUE
@@ -2012,7 +2012,7 @@ dr-xr-xr-x   1 owner    group               0 Feb  1 17:32 bussys
       l_data               CLOB;
       l_conn               UTL_TCP.connection := u_ctrl_connection;
       c_process   CONSTANT VARCHAR2(100)
-                                 := 'hum_ftp_interface.GET_REMOTE_ASCII_DATA';
+                                 := 'ftp_interface.GET_REMOTE_ASCII_DATA';
    BEGIN
       DBMS_LOB.createtemporary(lob_loc =>      l_data
                              , CACHE =>        TRUE
@@ -2081,7 +2081,7 @@ dr-xr-xr-x   1 owner    group               0 Feb  1 17:32 bussys
       l_longdir_line_cnt   PLS_INTEGER        := 0;
       l_filename_search    VARCHAR2(1000);
       c_process   CONSTANT VARCHAR2(100)
-                               := 'hum_ftp_interface.GET_REMOTE_LISTING_DATA';
+                               := 'ftp_interface.GET_REMOTE_LISTING_DATA';
    BEGIN
       DBMS_LOB.createtemporary(lob_loc =>      l_data
                              , CACHE =>        TRUE
@@ -2371,7 +2371,7 @@ dr-xr-xr-x   1 owner    group               0 Feb  1 17:32 bussys
       l_pos                INTEGER            := 1;
       l_blob_len           INTEGER;
       c_process   CONSTANT VARCHAR2(100)
-                                 := 'hum_ftp_interface.PUT_LOCAL_BINARY_DATA';
+                                 := 'ftp_interface.PUT_LOCAL_BINARY_DATA';
    BEGIN
       l_blob_len    := DBMS_LOB.getlength(p_data);
       l_out_file    := UTL_FILE.fopen(p_dir, p_file, 'w', 32767);
@@ -2489,7 +2489,7 @@ dr-xr-xr-x   1 owner    group               0 Feb  1 17:32 bussys
       l_blob_len           INTEGER;
       l_conn               UTL_TCP.connection := u_ctrl_connection;
       c_process   CONSTANT VARCHAR2(100)
-                                := 'hum_ftp_interface.PUT_REMOTE_BINARY_DATA';
+                                := 'ftp_interface.PUT_REMOTE_BINARY_DATA';
    BEGIN
       l_blob_len    := DBMS_LOB.getlength(p_data);
 
@@ -2530,7 +2530,7 @@ dr-xr-xr-x   1 owner    group               0 Feb  1 17:32 bussys
       l_clob_len           INTEGER;
       l_conn               UTL_TCP.connection := u_ctrl_connection;
       c_process   CONSTANT VARCHAR2(100)
-                                 := 'hum_ftp_interface.PUT_REMOTE_ASCII_DATA';
+                                 := 'ftp_interface.PUT_REMOTE_ASCII_DATA';
    BEGIN
       l_clob_len    := DBMS_LOB.getlength(p_data);
 
@@ -2574,7 +2574,7 @@ dr-xr-xr-x   1 owner    group               0 Feb  1 17:32 bussys
     , p_mainframe_cmd       IN       VARCHAR2 DEFAULT NULL)
       RETURN BOOLEAN
    IS
-      c_process        CONSTANT VARCHAR2(100)  := 'hum_ftp_interface.PUT';
+      c_process        CONSTANT VARCHAR2(100)  := 'ftp_interface.PUT';
       t_files                   t_ftp_rec;
       v_username                VARCHAR2(30)   := p_username;
       v_password                VARCHAR2(50)   := p_password;
@@ -2670,7 +2670,7 @@ dr-xr-xr-x   1 owner    group               0 Feb  1 17:32 bussys
     , p_mainframe_cmd       IN       VARCHAR2 DEFAULT NULL)
       RETURN BOOLEAN
    IS
-      c_process        CONSTANT VARCHAR2(100)  := 'hum_ftp_interface.GET';
+      c_process        CONSTANT VARCHAR2(100)  := 'ftp_interface.GET';
       t_files                   t_ftp_rec;
       v_username                VARCHAR2(30)   := p_username;
       v_password                VARCHAR2(50)   := p_password;
@@ -2765,7 +2765,7 @@ dr-xr-xr-x   1 owner    group               0 Feb  1 17:32 bussys
     , p_mainframe_connection   IN       BOOLEAN DEFAULT FALSE)
       RETURN BOOLEAN
    IS
-      c_process   CONSTANT VARCHAR2(100)  := 'hum_ftp_interface.REMOVE';
+      c_process   CONSTANT VARCHAR2(100)  := 'ftp_interface.REMOVE';
       t_files              t_ftp_rec;
       v_username           VARCHAR2(30)   := p_username;
       v_password           VARCHAR2(50)   := p_password;
@@ -2836,7 +2836,7 @@ dr-xr-xr-x   1 owner    group               0 Feb  1 17:32 bussys
     , p_mainframe_connection   IN       BOOLEAN DEFAULT FALSE)
       RETURN BOOLEAN
    IS
-      c_process   CONSTANT VARCHAR2(100)  := 'hum_ftp_interface.RENAME';
+      c_process   CONSTANT VARCHAR2(100)  := 'ftp_interface.RENAME';
       t_files              t_ftp_rec;
       v_username           VARCHAR2(30)   := p_username;
       v_password           VARCHAR2(50)   := p_password;
@@ -2902,7 +2902,7 @@ dr-xr-xr-x   1 owner    group               0 Feb  1 17:32 bussys
     , p_mainframe_connection   IN       BOOLEAN DEFAULT FALSE)
       RETURN BOOLEAN
    IS
-      c_process   CONSTANT VARCHAR2(100) := 'hum_ftp_interface.VERIFY_SERVER';
+      c_process   CONSTANT VARCHAR2(100) := 'ftp_interface.VERIFY_SERVER';
       v_username           VARCHAR2(30)       := p_username;
       v_password           VARCHAR2(30)       := p_password;
       v_hostname           VARCHAR2(30)       := p_hostname;
@@ -3049,7 +3049,7 @@ dr-xr-xr-x   1 owner    group               0 Feb  1 17:32 bussys
     , p_mainframe_ftp       IN       BOOLEAN DEFAULT FALSE)
       RETURN BOOLEAN
    IS
-      c_process   CONSTANT VARCHAR2(100)  := 'hum_ftp_interface.DIR';
+      c_process   CONSTANT VARCHAR2(100)  := 'ftp_interface.DIR';
       t_files              t_ftp_rec;
       v_username           VARCHAR2(30)   := p_username;
       v_password           VARCHAR2(50)   := p_password;
@@ -3174,7 +3174,7 @@ dr-xr-xr-x   1 owner    group               0 Feb  1 17:32 bussys
     , p_mainframe_ftp       IN       BOOLEAN DEFAULT FALSE)
       RETURN BOOLEAN
    IS
-      c_process   CONSTANT VARCHAR2(100)  := 'hum_ftp_interface.LS';
+      c_process   CONSTANT VARCHAR2(100)  := 'ftp_interface.LS';
       t_files              t_ftp_rec;
       v_username           VARCHAR2(30)   := p_username;
       v_password           VARCHAR2(50)   := p_password;
@@ -3300,7 +3300,7 @@ dr-xr-xr-x   1 owner    group               0 Feb  1 17:32 bussys
     , p_mainframe_cmd       IN       VARCHAR2 DEFAULT NULL)
       RETURN BOOLEAN
    IS
-      c_process        CONSTANT VARCHAR2(100) := 'hum_ftp_interface.PUT_CLOB';
+      c_process        CONSTANT VARCHAR2(100) := 'ftp_interface.PUT_CLOB';
       t_files                   t_ftp_rec;
       v_username                VARCHAR2(30)   := p_username;
       v_password                VARCHAR2(50)   := p_password;
@@ -3415,7 +3415,7 @@ dr-xr-xr-x   1 owner    group               0 Feb  1 17:32 bussys
     , p_mainframe_cmd       IN       VARCHAR2 DEFAULT NULL)
       RETURN BOOLEAN
    IS
-      c_process        CONSTANT VARCHAR2(100) := 'hum_ftp_interface.GET_CLOB';
+      c_process        CONSTANT VARCHAR2(100) := 'ftp_interface.GET_CLOB';
       t_files                   t_ftp_rec;
       v_username                VARCHAR2(30)   := p_username;
       v_password                VARCHAR2(50)   := p_password;
@@ -3536,7 +3536,7 @@ dr-xr-xr-x   1 owner    group               0 Feb  1 17:32 bussys
     , p_mainframe_cmd       IN       VARCHAR2 DEFAULT NULL)
       RETURN BOOLEAN
    IS
-      c_process        CONSTANT VARCHAR2(100) := 'hum_ftp_interface.PUT_BLOB';
+      c_process        CONSTANT VARCHAR2(100) := 'ftp_interface.PUT_BLOB';
       t_files                   t_ftp_rec;
       v_username                VARCHAR2(30)   := p_username;
       v_password                VARCHAR2(50)   := p_password;
@@ -3651,7 +3651,7 @@ dr-xr-xr-x   1 owner    group               0 Feb  1 17:32 bussys
     , p_mainframe_cmd       IN       VARCHAR2 DEFAULT NULL)
       RETURN BOOLEAN
    IS
-      c_process        CONSTANT VARCHAR2(100) := 'hum_ftp_interface.GET_BLOB';
+      c_process        CONSTANT VARCHAR2(100) := 'ftp_interface.GET_BLOB';
       t_files                   t_ftp_rec;
       v_username                VARCHAR2(30)   := p_username;
       v_password                VARCHAR2(50)   := p_password;
@@ -3770,7 +3770,7 @@ dr-xr-xr-x   1 owner    group               0 Feb  1 17:32 bussys
     , p_mainframe_ftp       IN       BOOLEAN DEFAULT FALSE)
       RETURN BOOLEAN
    IS
-      c_process   CONSTANT VARCHAR2(100)  := 'hum_ftp_interface.DIR_CLOB';
+      c_process   CONSTANT VARCHAR2(100)  := 'ftp_interface.DIR_CLOB';
       t_files              t_ftp_rec;
       v_username           VARCHAR2(30)   := p_username;
       v_password           VARCHAR2(50)   := p_password;
@@ -3879,7 +3879,7 @@ dr-xr-xr-x   1 owner    group               0 Feb  1 17:32 bussys
     , p_mainframe_ftp       IN       BOOLEAN DEFAULT FALSE)
       RETURN BOOLEAN
    IS
-      c_process   CONSTANT VARCHAR2(100)  := 'hum_ftp_interface.LS_CLOB';
+      c_process   CONSTANT VARCHAR2(100)  := 'ftp_interface.LS_CLOB';
       t_files              t_ftp_rec;
       v_username           VARCHAR2(30)   := p_username;
       v_password           VARCHAR2(50)   := p_password;
@@ -3980,7 +3980,7 @@ dr-xr-xr-x   1 owner    group               0 Feb  1 17:32 bussys
     , p_mainframe_connection   IN       BOOLEAN DEFAULT FALSE)
       RETURN BOOLEAN
    IS
-      c_process   CONSTANT VARCHAR2(100)  := 'hum_ftp_interface.MKDIR_REMOTE';
+      c_process   CONSTANT VARCHAR2(100)  := 'ftp_interface.MKDIR_REMOTE';
       v_username           VARCHAR2(30)       := p_username;
       v_password           VARCHAR2(30)       := p_password;
       v_hostname           VARCHAR2(30)       := p_hostname;
@@ -4149,7 +4149,7 @@ dr-xr-xr-x   1 owner    group               0 Feb  1 17:32 bussys
     , p_mainframe_connection   IN       BOOLEAN DEFAULT FALSE)
       RETURN BOOLEAN
    IS
-      c_process   CONSTANT VARCHAR2(100)  := 'hum_ftp_interface.RMDIR_REMOTE';
+      c_process   CONSTANT VARCHAR2(100)  := 'ftp_interface.RMDIR_REMOTE';
       v_username           VARCHAR2(30)       := p_username;
       v_password           VARCHAR2(30)       := p_password;
       v_hostname           VARCHAR2(30)       := p_hostname;
@@ -4299,5 +4299,5 @@ dr-xr-xr-x   1 owner    group               0 Feb  1 17:32 bussys
          UTL_TCP.close_all_connections;
          RETURN FALSE;
    END rmdir_remote;
-END hum_ftp_interface;
+END ftp_interface;
 /
