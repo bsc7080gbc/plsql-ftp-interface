@@ -5,7 +5,7 @@ FTP Interface PLSQL based - using UTL_TCP
 
 This latest edition of the FTP_INTERFACE has been modified to support LS/DIR commands.
 The LS command provides directory results of remote server in filename only format. The
-DIR command provides directory results of remote server in full detail (long version).
+DIR command provides directory results of remote server in full detail (long-version).
 
 Additionally, you have the option of displaying filematches. Normally a ls/dir command
 does not permit the option of declaring filename filters. However, this new version will
